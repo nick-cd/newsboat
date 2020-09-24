@@ -216,7 +216,6 @@ TEST_CASE("handle_action()", "[KeyMap]")
 	}
 
 	SECTION("macro without commands results in exception") {
-		REQUIRE_NOTHROW(k.handle_action("macro", "r ; ; ; ; open"));
 		REQUIRE_THROWS_AS(k.handle_action("macro", "r ; ; ; ;"),
 			ConfigHandlerException);
 	}
@@ -480,8 +479,7 @@ TEST_CASE("dump_config() returns a line for each keybind and macro", "[KeyMap]")
 	}
 }
 
-// Related to https://github.com/newsboat/newsboat/issues/702
-TEST_CASE("Regression test for macro configuration semicolon handling",
+TEST_CASE("Regression test for https://github.com/newsboat/newsboat/issues/702",
 	"[KeyMap]")
 {
 	KeyMap k(KM_NEWSBOAT);
@@ -517,5 +515,72 @@ TEST_CASE("Regression test for macro configuration semicolon handling",
 		REQUIRE(macros[0].args == std::vector<std::string>({}));
 		REQUIRE(macros[1].op == OP_QUIT);
 		REQUIRE(macros[1].args == std::vector<std::string>({}));
+	}
+}
+
+TEST_CASE("Whitespace around semicolons in macros is optional", "[KeyMap]")
+{
+	KeyMap k(KM_NEWSBOAT);
+
+	const auto check = [&k]() {
+		const auto macro = k.get_macro("x");
+
+		REQUIRE(macro.size() == 3);
+
+		REQUIRE(macro[0].op == OP_OPEN);
+		REQUIRE(macro[0].args == std::vector<std::string>({}));
+
+		REQUIRE(macro[1].op == OP_INT_SET);
+		REQUIRE(macro[1].args == std::vector<std::string>({"browser", "firefox --private-window"}));
+
+		REQUIRE(macro[2].op == OP_QUIT);
+		REQUIRE(macro[2].args == std::vector<std::string>({}));
+	};
+
+	SECTION("Whitespace not required before the semicolon") {
+		k.handle_action("macro",
+			R"(x open; set browser "firefox --private-window"; quit)");
+		check();
+	}
+
+	SECTION("Whitespace not required after the semicolon") {
+		k.handle_action("macro",
+			R"(x open ;set browser "firefox --private-window" ;quit)");
+		check();
+	}
+
+	SECTION("Whitespace not required on either side of the semicolon") {
+		k.handle_action("macro",
+			R"(x open;set browser "firefox --private-window";quit)");
+		check();
+	}
+}
+
+TEST_CASE("It's not an error to have no operations before a semicolon in "
+	"a macro",
+	"[KeyMap]")
+{
+	KeyMap k(KM_NEWSBOAT);
+
+	const std::vector<std::string> op_lists = {
+		"; ;; ; open",
+		";;; ;; ; open",
+		";;; ;; ; open ;",
+		";;; ;; ; open ;; ;",
+		";;; ;; ; open ; ;;;;",
+		";;; open ; ;;;;",
+		"; open ;; ;; ;",
+		"open ; ;;; ;;",
+	};
+
+	for (const auto& op_list : op_lists) {
+		DYNAMIC_SECTION(op_list) {
+			k.handle_action("macro", "r " + op_list);
+
+			const auto macro = k.get_macro("r");
+			REQUIRE(macro.size() == 1);
+			REQUIRE(macro[0].op == OP_OPEN);
+			REQUIRE(macro[0].args == std::vector<std::string>({}));
+		}
 	}
 }
