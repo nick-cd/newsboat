@@ -1,17 +1,22 @@
 use nom::{
     branch::alt,
     bytes::complete::{escaped_transform, is_not, tag},
-    character::complete::space0,
-    combinator::{complete, map, value},
+    character::complete::{none_of, space0},
+    combinator::{complete, map, recognize, value},
     multi::{many0, many1, separated_list, separated_nonempty_list},
-    sequence::delimited,
+    sequence::{delimited, tuple},
     IResult,
 };
 
-fn token(input: &str) -> IResult<&str, String> {
-    let unquoted_token = map(is_not(" ;\""), String::from);
+fn unquoted_token(input: &str) -> IResult<&str, String> {
+    let parser = tuple((none_of("\";"), is_not(" ;")));
+    let parser = map(recognize(parser), String::from);
 
-    let quoted_token = escaped_transform(is_not(r#""\"#), '\\', |control_char: &str| {
+    parser(input)
+}
+
+fn quoted_token(input: &str) -> IResult<&str, String> {
+    let parser = escaped_transform(is_not(r#""\"#), '\\', |control_char: &str| {
         alt((
             value(r#"""#, tag(r#"""#)),
             value(r#"\"#, tag(r#"\"#)),
@@ -23,11 +28,15 @@ fn token(input: &str) -> IResult<&str, String> {
                                      // chars unchanged. Write tests for that!
         ))(control_char)
     });
+
     let double_quote = tag("\"");
-    let quoted_token = delimited(&double_quote, quoted_token, &double_quote);
+    let parser = delimited(&double_quote, parser, &double_quote);
 
+    parser(input)
+}
+
+fn token(input: &str) -> IResult<&str, String> {
     let parser = alt((quoted_token, unquoted_token));
-
     parser(input)
 }
 
@@ -171,5 +180,25 @@ mod tests {
                 vec!["open-in-browser"]
             ]
         );
+    }
+
+    #[test]
+    fn t_tokenize_operation_sequence_ignores_escaped_sequences_outside_double_quotes() {
+        assert_eq!(tokenize_operation_sequence(r#"\t"#), vec![vec![r#"\t"#]]);
+        assert_eq!(tokenize_operation_sequence(r#"\r"#), vec![vec![r#"\r"#]]);
+        assert_eq!(tokenize_operation_sequence(r#"\n"#), vec![vec![r#"\n"#]]);
+        assert_eq!(tokenize_operation_sequence(r#"\v"#), vec![vec![r#"\v"#]]);
+        assert_eq!(tokenize_operation_sequence(r#"\""#), vec![vec![r#"\""#]]);
+        assert_eq!(tokenize_operation_sequence(r#"\\"#), vec![vec![r#"\\"#]]);
+    }
+
+    #[test]
+    fn t_tokenize_operation_sequence_expands_escaped_sequences_inside_double_quotes() {
+        assert_eq!(tokenize_operation_sequence(r#""\t""#), vec![vec!["\t"]]);
+        assert_eq!(tokenize_operation_sequence(r#""\r""#), vec![vec!["\r"]]);
+        assert_eq!(tokenize_operation_sequence(r#""\n""#), vec![vec!["\n"]]);
+        assert_eq!(tokenize_operation_sequence(r#""\v""#), vec![vec!["\x0b"]]); // vertical tab
+        assert_eq!(tokenize_operation_sequence(r#""\"""#), vec![vec!["\""]]);
+        assert_eq!(tokenize_operation_sequence(r#""\\""#), vec![vec!["\\"]]);
     }
 }
