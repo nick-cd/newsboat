@@ -38,8 +38,7 @@ fn quoted_token(input: &str) -> IResult<&str, String> {
             value("\r", tag("r")),
             value("\n", tag("n")),
             value("\t", tag("t")),
-            value("\x0b", tag("v")), // vertical tab
-            take(1usize),            // all other escaped characters are passed through, unmodified
+            take(1usize), // all other escaped characters are passed through, unmodified
         ))(control_char)
     });
 
@@ -256,10 +255,6 @@ mod tests {
         assert_eq!(
             tokenize_operation_sequence(r#""\n""#).unwrap(),
             vec![vec!["\n"]]
-        );
-        assert_eq!(
-            tokenize_operation_sequence(r#""\v""#).unwrap(),
-            vec![vec!["\x0b"]] // vertical tab
         );
         assert_eq!(
             tokenize_operation_sequence(r#""\"""#).unwrap(),
