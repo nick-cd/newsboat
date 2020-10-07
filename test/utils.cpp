@@ -250,6 +250,26 @@ TEST_CASE("tokenize_quoted does not consider escaped pound sign (\\#) "
 	REQUIRE(tokens[3] == "three");
 }
 
+TEST_CASE("tokenize_quoted() expands escaped sequences inside double quotes",
+	"[utils]")
+{
+	REQUIRE(utils::tokenize_quoted(R"#("\t")#") == std::vector<std::string> {"\t"});
+	REQUIRE(utils::tokenize_quoted(R"#("\r")#") == std::vector<std::string> {"\r"});
+	REQUIRE(utils::tokenize_quoted(R"#("\n")#") == std::vector<std::string> {"\n"});
+	REQUIRE(utils::tokenize_quoted(R"#("\"")#") == std::vector<std::string> {"\""});
+	REQUIRE(utils::tokenize_quoted(R"#("\\")#") == std::vector<std::string> {"\\"});
+}
+
+TEST_CASE("tokenize_quoted() passes through unsupported escaped sequences inside double quotes",
+	"[utils]")
+{
+	REQUIRE(utils::tokenize_quoted(R"#("\1")#") == std::vector<std::string> {"1"});
+	REQUIRE(utils::tokenize_quoted(R"#("\W")#") == std::vector<std::string> {"W"});
+	REQUIRE(utils::tokenize_quoted(R"#("\b")#") == std::vector<std::string> {"b"});
+	REQUIRE(utils::tokenize_quoted(R"#("\d")#") == std::vector<std::string> {"d"});
+	REQUIRE(utils::tokenize_quoted(R"#("\x")#") == std::vector<std::string> {"x"});
+}
+
 TEST_CASE("extract_token_quoted() returns no result if it finds a comment (signaled by '#')",
 	"[utils]")
 {
