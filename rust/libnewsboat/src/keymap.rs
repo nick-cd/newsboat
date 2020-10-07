@@ -3,10 +3,25 @@ use nom::{
     bytes::complete::{escaped_transform, is_not, tag, take},
     character::complete::{none_of, space0},
     combinator::{complete, map, recognize, value},
+    error::{ErrorKind, ParseError},
     multi::{many0, many1, separated_list, separated_nonempty_list},
     sequence::{delimited, tuple},
-    IResult,
+    Err, IResult, InputLength,
 };
+
+/// returns its input if it is at the end of input data
+///
+/// When we're at the end of the data, this combinator
+/// will succeed
+///
+// Code lifted from https://github.com/Geal/nom/pull/1112
+fn eof<I: InputLength + Copy, E: ParseError<I>>(input: I) -> IResult<I, I, E> {
+    if input.input_len() == 0 {
+        Ok((input, input))
+    } else {
+        Err(Err::Error(E::from_error_kind(input, ErrorKind::Eof)))
+    }
+}
 
 fn unquoted_token(input: &str) -> IResult<&str, String> {
     let parser = tuple((none_of("\";"), is_not(" ;")));
@@ -29,7 +44,7 @@ fn quoted_token(input: &str) -> IResult<&str, String> {
     });
 
     let double_quote = tag("\"");
-    let parser = delimited(&double_quote, parser, &double_quote);
+    let parser = delimited(&double_quote, parser, alt((&double_quote, eof)));
 
     parser(input)
 }
@@ -104,7 +119,6 @@ mod tests {
             tokenize_operation_sequence(r#"set "arg 1""#),
             vec![vec!["set", "arg 1"]]
         );
-        // TODO: how would the old parser react if the last token didn't close the double quotes?
         assert_eq!(
             tokenize_operation_sequence(r#"set "arg 1" ; set "arg 2" "arg 3""#),
             vec![vec!["set", "arg 1"], vec!["set", "arg 2", "arg 3"]]
@@ -216,5 +230,13 @@ mod tests {
         assert_eq!(tokenize_operation_sequence(r#""\b""#), vec![vec!["b"]]);
         assert_eq!(tokenize_operation_sequence(r#""\d""#), vec![vec!["d"]]);
         assert_eq!(tokenize_operation_sequence(r#""\x""#), vec![vec!["x"]]);
+    }
+
+    #[test]
+    fn t_tokenize_operation_sequence_implicitly_closes_double_quotes_at_end_of_input() {
+        assert_eq!(
+            tokenize_operation_sequence(r#"set "arg 1"#),
+            vec![vec!["set", "arg 1"]]
+        );
     }
 }
