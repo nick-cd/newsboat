@@ -74,6 +74,10 @@ fn operation_sequence(input: &str) -> IResult<&str, Vec<Vec<String>>> {
 /// a non-empty sub-vector, where the first element is the name of the operation, and the rest of
 /// the elements are operation's arguments.
 ///
+/// Tokens can be double-quoted. Such tokens can contain spaces and C-like escaped sequences: `\n`
+/// for newline, `\r` for carriage return, `\t` for tab, `\"` for double quote, `\\` for backslash.
+/// Unsupported sequences are stripped of the escaping, i.e. `\e` turns into `e`.
+///
 /// This function assumes that the input string:
 /// 1. doesn't contain a comment;
 /// 2. doesn't contain backticks that need to be processed.
